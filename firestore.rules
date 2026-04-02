@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - name: string (required)
+    //   - email: string (optional, email format)
+    //   - role: string (required, 'admin' or 'teacher')
+    //   - assignedClasses: list (optional, strings)
+    //   - status: string (optional)
+    //
+    // Collection: classes
+    // Document ID: {classId}
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - level: string (optional)
+    //
+    // Collection: students
+    // Document ID: {studentId}
+    // Fields:
+    //   - massar_id: string (required)
+    //   - profile: map (required)
+    //   - status_flags: map (optional)
+    //   - attendance_history: list (optional)
+    //
+    // Collection: attendanceRecords
+    // Document ID: {recordId}
+    // Fields:
+    //   - id: string (required)
+    //   - date: string (required, ISO 8601)
+    //   - className: string (required)
+    //   - teacherName: string (required)
+    //   - students: list (optional)
+    //
+    // Collection: settings
+    // Document ID: global
+    // Fields:
+    //   - schoolName: string (optional)
+    //   - academicYear: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "chochodidije@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'role', 'assignedClasses', 'status']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             data.role in ['admin', 'teacher'];
+    }
+
+    function isValidClass(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'level']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 50 &&
+             (!('level' in data) || (data.level is string && data.level.size() < 50));
+    }
+
+    function isValidStudent(data) {
+      return hasOnlyAllowedFields(['massar_id', 'profile', 'status_flags', 'attendance_history']) &&
+             data.massar_id is string && data.massar_id.size() > 0 &&
+             data.profile is map &&
+             (!('status_flags' in data) || data.status_flags is map) &&
+             (!('attendance_history' in data) || data.attendance_history is list);
+    }
+
+    function isValidAttendanceRecord(data) {
+      return hasOnlyAllowedFields(['id', 'date', 'className', 'teacherName', 'students']) &&
+             data.id is string && data.id.size() > 0 &&
+             isValidDateString(data.date) &&
+             data.className is string && data.className.size() > 0 &&
+             data.teacherName is string && data.teacherName.size() > 0 &&
+             (!('students' in data) || data.students is list);
+    }
+
+    function isValidSettings(data) {
+      return hasOnlyAllowedFields(['schoolName', 'academicYear']) &&
+             (!('schoolName' in data) || (data.schoolName is string && data.schoolName.size() < 100)) &&
+             (!('academicYear' in data) || (data.academicYear is string && data.academicYear.size() < 20));
+    }
+
+    // ===============================================================
+    // Match Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    ((isOwner(userId) && request.resource.data.role == 'teacher') || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidClass(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create, update: if (isAdmin() || isAuthenticated()) && isValidStudent(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /attendanceRecords/{recordId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidAttendanceRecord(request.resource.data);
+      allow update: if (isAdmin() || isAuthenticated()) && isValidAttendanceRecord(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /settings/global {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidSettings(request.resource.data);
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

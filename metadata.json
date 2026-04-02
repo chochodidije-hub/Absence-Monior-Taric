@@ -1,0 +1,5 @@
+{
+  "name": "Absence Monitor",
+  "description": "A standalone static HTML application for monitoring absences, featuring login, admin, and teacher interfaces.",
+  "requestFramePermissions": []
+}

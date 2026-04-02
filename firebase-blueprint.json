@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and role information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "teacher"] },
+        "assignedClasses": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string" }
+      },
+      "required": ["uid", "name", "role"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "Class information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "level": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student information and attendance history",
+      "type": "object",
+      "properties": {
+        "massar_id": { "type": "string" },
+        "profile": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "class": { "type": "string" },
+            "order_num": { "type": "number" }
+          }
+        },
+        "status_flags": {
+          "type": "object",
+          "properties": {
+            "is_summoned": { "type": "boolean" },
+            "is_demo": { "type": "boolean" }
+          }
+        },
+        "attendance_history": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      },
+      "required": ["massar_id", "profile"]
+    },
+    "AttendanceRecord": {
+      "title": "Attendance Record",
+      "description": "Record of a single attendance session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "className": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "students": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["id", "date", "className", "teacherName"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "schoolName": { "type": "string" },
+        "academicYear": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Collection of user profiles"
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Collection of classes"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of students"
+    },
+    "/attendanceRecords/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Collection of attendance records"
+    },
+    "/settings/global": {
+      "schema": "Settings",
+      "description": "Global settings document"
+    }
+  }
+}
